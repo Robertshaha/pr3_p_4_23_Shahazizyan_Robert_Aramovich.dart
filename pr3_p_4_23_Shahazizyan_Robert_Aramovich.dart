@@ -3,6 +3,7 @@ import 'dart:io';
 class Book {
   String title;
   String author;
+  String isbn;
 
   Book(this.title, this.author,);
 }
@@ -119,6 +120,8 @@ void main() {
         String title = stdin.readLineSync() ?? '';
         stdout.write("Введите автора книги: ");
         String author = stdin.readLineSync() ?? '';
+        stdout.write("Введите isbn книги: ");
+        String isbn = stdin.readLineSync() ?? '';
         library.addBook(Book(title, author,));
         break;
 
