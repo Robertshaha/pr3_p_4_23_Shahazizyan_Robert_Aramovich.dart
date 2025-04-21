@@ -1,214 +1,421 @@
 import 'dart:io';
 
+abstract class Person {
+  final String fullName;
+  final String email;
+  final String phoneNumber;
+
+  Person(this.fullName, this.email, this.phoneNumber);
+
+  void displayInfo();
+}
+
 class Book {
-  String title;
-  String author;
-  String isbn;
-  bool isAvailable;
+  final String title;
+  final String author;
+  final String isbn;
+  bool _isAvailable;
 
-  Book(this.title, this.author,this.isbn): isAvailable = true;
+  Book(this.title, this.author, this.isbn) : _isAvailable = true;
+
+  bool get isAvailable => _isAvailable;
+
+  void markAsBorrowed() => _isAvailable = false;
+  void markAsReturned() => _isAvailable = true;
+
+  @override
+  String toString() => "'$title' автор $author (ISBN: $isbn)";
 }
 
-class Member {
-  String fullName;
-  String email;
-  String phoneNumber;
+class Member extends Person {
+  final DateTime registrationDate;
+  List<Book> borrowedBooks = [];
 
-  Member(this.fullName, this.email, this.phoneNumber);
-}
+  Member(String fullName, String email, String phoneNumber, this.registrationDate)
+      : super(fullName, email, phoneNumber);
 
-class Author {
-  String fullName;
-  String email;
-  String phoneNumber;
-  String status;
-
-  Author(this.fullName, this.email, this.phoneNumber, this.status);
-}
-
-class Loan {
-  Member member;
-  Book book;
-  DateTime loanDate;
-  DateTime? returnDate;
-
-  Loan(this.member, this.book, this.loanDate);
-}
-
-class Library {
-  List<Book> books = [];
-  List<Member> members = [];
-  List<Loan> loans = [];
-
-  void addBook(Book book) {
-    books.add(book);
-    print("Книга '${book.title}' добавлена в библиотеку.");
-  }
-
-  void addMember(Member member) {
-    members.add(member);
-    print("Член библиотеки '${member.fullName}' добавлен.");
-  }
-
-  void loanBook(Member member, Book book) {
-    if (loans.any((loan) => loan.book == book && loan.returnDate == null)) {
-      print("Ошибка: книга '${book.title}' уже выдана.");
-      return;
-    }
-    Loan loan = Loan(member, book, DateTime.now());
-    loans.add(loan);
-    print("Книга '${book.title}' выдана члену библиотеки '${member.fullName}'.");
+  void borrowBook(Book book) {
+    borrowedBooks.add(book);
+    book.markAsBorrowed();
   }
 
   void returnBook(Book book) {
-    for (var loan in loans) {
-      if (loan.book == book && loan.returnDate == null) {
-        loan.returnDate = DateTime.now();
-        print("Книга '${book.title}' возвращена.");
-        return;
-      }
-    }
-    print("Ошибка: книга '${book.title}' не была выдана.");
+    borrowedBooks.remove(book);
+    book.markAsReturned();
   }
 
-  void listBooks() {
-    if (books.isEmpty) {
-      print("В библиотеке нет книг.");
-      return;
-    }
-    for (var book in books) {
-      bool isLoaned = loans.any((loan) => loan.book == book && loan.returnDate == null);
-      String status = isLoaned ? "выдана" : "доступна";
-      print("Книга: '${book.title}', Автор: '${book.author}', Статус: $status");
-    }
+  @override
+  void displayInfo() {
+    print('''
+Информация о члене библиотеки:
+  Имя: $fullName
+  Email: $email
+  Телефон: $phoneNumber
+  Дата регистрации: ${registrationDate.toLocal()}
+  Книг на руках: ${borrowedBooks.length}''');
+  }
+}
+
+class Author extends Person {
+  final String biography;
+  final List<Book> publishedBooks = [];
+
+  Author(String fullName, String email, String phoneNumber, this.biography)
+      : super(fullName, email, phoneNumber);
+
+  void addPublishedBook(Book book) {
+    publishedBooks.add(book);
   }
 
-  void listMembers() {
-    if (members.isEmpty) {
-      print("В библиотеке нет членов.");
+  @override
+  void displayInfo() {
+    print('''
+Информация об авторе:
+  Имя: $fullName
+  Email: $email
+  Телефон: $phoneNumber
+  Биография: $biography
+  Опубликованных книг: ${publishedBooks.length}''');
+  }
+}
+
+class Loan {
+  final Member member;
+  final Book book;
+  final DateTime loanDate;
+  DateTime? _returnDate;
+
+  Loan(this.member, this.book, this.loanDate) {
+    member.borrowBook(book);
+  }
+
+  DateTime? get returnDate => _returnDate;
+
+  void returnBook() {
+    _returnDate = DateTime.now();
+    member.returnBook(book);
+  }
+
+  Duration get loanDuration => (_returnDate ?? DateTime.now()).difference(loanDate);
+}
+
+class Library {
+  final List<Book> _books = [];
+  final List<Member> _members = [];
+  final List<Loan> _loans = [];
+  final List<Author> _authors = [];
+
+  List<Book> get books => List.unmodifiable(_books);
+  List<Member> get members => List.unmodifiable(_members);
+  List<Loan> get activeLoans => _loans.where((loan) => loan.returnDate == null).toList();
+
+  void addBook(Book book, [Author? author]) {
+    _books.add(book);
+    author?.addPublishedBook(book);
+    print("Книга добавлена: $book");
+  }
+
+  void addMember(Member member) {
+    _members.add(member);
+    print("Член библиотеки зарегистрирован: ${member.fullName}");
+  }
+
+  void addAuthor(Author author) {
+    _authors.add(author);
+    print("Автор добавлен: ${author.fullName}");
+  }
+
+  void loanBook(Member member, Book book) {
+    if (!book.isAvailable) {
+      throw Exception("Книга недоступна для выдачи");
+    }
+    if (!_members.contains(member)) {
+      throw Exception("Член библиотеки не зарегистрирован");
+    }
+    _loans.add(Loan(member, book, DateTime.now()));
+    print("Книга '${book.title}' выдана ${member.fullName}");
+  }
+
+  void returnBook(Book book) {
+    final loan = _loans.firstWhere(
+      (l) => l.book == book && l.returnDate == null,
+      orElse: () => throw Exception("Книга не находится в выдаче"),
+    );
+    loan.returnBook();
+    print("Книга '${book.title}' возвращена ${loan.member.fullName}");
+  }
+
+  void displayAllBooks() {
+    if (_books.isEmpty) {
+      print("В библиотеке нет книг");
       return;
     }
-    for (var member in members) {
-      print("Член библиотеки: '${member.fullName}', Email: '${member.email}', Телефон: '${member.phoneNumber}'");
+    print("\nКниги в библиотеке:");
+    _books.forEach((book) {
+      final status = book.isAvailable ? "Доступна" : "На выдаче";
+      print("$book - Статус: $status");
+    });
+  }
+
+  void displayAllMembers() {
+    if (_members.isEmpty) {
+      print("Нет зарегистрированных членов");
+      return;
     }
+    print("\nЧлены библиотеки:");
+    _members.forEach((member) => member.displayInfo());
+  }
+
+  void displayAllAuthors() {
+    if (_authors.isEmpty) {
+      print("Нет зарегистрированных авторов");
+      return;
+    }
+    print("\nАвторы:");
+    _authors.forEach((author) => author.displayInfo());
   }
 
   List<Book> searchBooks(String query) {
-    return books.where((book) => book.title.contains(query) || book.author.contains(query)).toList();
+    return _books.where((book) =>
+        book.title.toLowerCase().contains(query.toLowerCase()) ||
+        book.author.toLowerCase().contains(query.toLowerCase())).toList();
+  }
+
+  List<Member> searchMembers(String query) {
+    return _members.where((member) =>
+        member.fullName.toLowerCase().contains(query.toLowerCase()) ||
+        member.email.toLowerCase().contains(query.toLowerCase())).toList();
+  }
+}
+
+class LibraryApp {
+  final Library _library = Library();
+
+  void run() {
+    print("Добро пожаловать в систему управления библиотекой");
+
+    while (true) {
+      _displayMenu();
+      final choice = _getUserChoice();
+
+      switch (choice) {
+        case 1:
+          _addBook();
+          break;
+        case 2:
+          _addMember();
+          break;
+        case 3:
+          _addAuthor();
+          break;
+        case 4:
+          _loanBook();
+          break;
+        case 5:
+          _returnBook();
+          break;
+        case 6:
+          _library.displayAllBooks();
+          break;
+        case 7:
+          _library.displayAllMembers();
+          break;
+        case 8:
+          _library.displayAllAuthors();
+          break;
+        case 9:
+          _searchBooks();
+          break;
+        case 10:
+          _searchMembers();
+          break;
+        case 0:
+          print("Выход из системы...");
+          return;
+        default:
+          print("Неверный ввод. Пожалуйста, попробуйте снова.");
+      }
+    }
+  }
+
+  void _displayMenu() {
+    print("\n--- Система управления библиотекой ---");
+    print("1. Добавить книгу");
+    print("2. Добавить члена библиотеки");
+    print("3. Добавить автора");
+    print("4. Выдать книгу");
+    print("5. Вернуть книгу");
+    print("6. Показать все книги");
+    print("7. Показать всех членов");
+    print("8. Показать всех авторов");
+    print("9. Поиск книг");
+    print("10. Поиск членов");
+    print("0. Выход");
+    stdout.write("Введите ваш выбор: ");
+  }
+
+  int _getUserChoice() {
+    try {
+      return int.parse(stdin.readLineSync() ?? '');
+    } catch (e) {
+      return -1;
+    }
+  }
+
+  void _addBook() {
+    print("\nДобавление новой книги");
+    stdout.write("Название: ");
+    final title = stdin.readLineSync() ?? '';
+    stdout.write("Автор: ");
+    final author = stdin.readLineSync() ?? '';
+    stdout.write("ISBN: ");
+    final isbn = stdin.readLineSync() ?? '';
+
+    stdout.write("Автор уже есть в системе? (y/n): ");
+    final authorInSystem = stdin.readLineSync()?.toLowerCase() == 'y';
+
+    Author? bookAuthor;
+    if (authorInSystem) {
+      stdout.write("Введите полное имя автора: ");
+      final authorName = stdin.readLineSync() ?? '';
+      bookAuthor = _library._authors.firstWhere(
+        (a) => a.fullName == authorName,
+        orElse: () {
+          print("Автор не найден. Создание нового автора.");
+          return _createAuthor(authorName);
+        },
+      );
+    } else {
+      bookAuthor = _createAuthor(author);
+    }
+
+    final book = Book(title, author, isbn);
+    _library.addBook(book, bookAuthor);
+  }
+
+  Author _createAuthor(String authorName) {
+    stdout.write("Email автора: ");
+    final email = stdin.readLineSync() ?? '';
+    stdout.write("Телефон автора: ");
+    final phone = stdin.readLineSync() ?? '';
+    stdout.write("Биография автора: ");
+    final bio = stdin.readLineSync() ?? '';
+
+    final author = Author(authorName, email, phone, bio);
+    _library.addAuthor(author);
+    return author;
+  }
+
+  void _addMember() {
+    print("\nРегистрация нового члена библиотеки");
+    stdout.write("Полное имя: ");
+    final name = stdin.readLineSync() ?? '';
+    stdout.write("Email: ");
+    final email = stdin.readLineSync() ?? '';
+    stdout.write("Телефон: ");
+    final phone = stdin.readLineSync() ?? '';
+
+    final member = Member(name, email, phone, DateTime.now());
+    _library.addMember(member);
+  }
+
+  void _addAuthor() {
+    print("\nДобавление нового автора");
+    stdout.write("Полное имя: ");
+    final name = stdin.readLineSync() ?? '';
+    stdout.write("Email: ");
+    final email = stdin.readLineSync() ?? '';
+    stdout.write("Телефон: ");
+    final phone = stdin.readLineSync() ?? '';
+    stdout.write("Биография: ");
+    final bio = stdin.readLineSync() ?? '';
+
+    final author = Author(name, email, phone, bio);
+    _library.addAuthor(author);
+  }
+
+  void _loanBook() {
+    if (_library._books.isEmpty) {
+      print("Нет доступных книг для выдачи");
+      return;
+    }
+    if (_library._members.isEmpty) {
+      print("Нет зарегистрированных членов");
+      return;
+    }
+
+    print("\nДоступные книги:");
+    _library._books.where((book) => book.isAvailable).forEach(print);
+
+    print("\nЗарегистрированные члены:");
+    _library._members.forEach((m) => print(m.fullName));
+
+    stdout.write("\nВведите название книги для выдачи: ");
+    final title = stdin.readLineSync() ?? '';
+    final book = _library._books.firstWhere(
+      (b) => b.title == title && b.isAvailable,
+      orElse: () => throw Exception("Книга не найдена или недоступна"),
+    );
+
+    stdout.write("Введите имя члена библиотеки: ");
+    final memberName = stdin.readLineSync() ?? '';
+    final member = _library._members.firstWhere(
+      (m) => m.fullName == memberName,
+      orElse: () => throw Exception("Член библиотеки не найден"),
+    );
+
+    _library.loanBook(member, book);
+  }
+
+  void _returnBook() {
+    final activeLoans = _library.activeLoans;
+    if (activeLoans.isEmpty) {
+      print("Нет книг на выдаче");
+      return;
+    }
+
+    print("\nКниги на выдаче:");
+    activeLoans.forEach((loan) {
+      print("${loan.book.title} (Выдано: ${loan.member.fullName})");
+    });
+
+    stdout.write("\nВведите название книги для возврата: ");
+    final title = stdin.readLineSync() ?? '';
+    final book = _library._books.firstWhere(
+      (b) => b.title == title && !b.isAvailable,
+      orElse: () => throw Exception("Книга не найдена или не на выдаче"),
+    );
+
+    _library.returnBook(book);
+  }
+
+  void _searchBooks() {
+    stdout.write("\nВведите запрос для поиска: ");
+    final query = stdin.readLineSync() ?? '';
+    final results = _library.searchBooks(query);
+    
+    if (results.isEmpty) {
+      print("Книги по запросу '$query' не найдены");
+    } else {
+      print("Результаты поиска:");
+      results.forEach(print);
+    }
+  }
+
+  void _searchMembers() {
+    stdout.write("\nВведите запрос для поиска: ");
+    final query = stdin.readLineSync() ?? '';
+    final results = _library.searchMembers(query);
+    
+    if (results.isEmpty) {
+      print("Члены библиотеки по запросу '$query' не найдены");
+    } else {
+      print("Результаты поиска:");
+      results.forEach((member) => print(member.fullName));
+    }
   }
 }
 
 void main() {
-  Library library = Library();
-
-  while (true) {
-    print("\n--- Меню библиотеки ---");
-    print("1. Добавить книгу");
-    print("2. Просмотреть книги");
-    print("3. Добавить члена библиотеки");
-    print("4. Выдать книгу");
-    print("5. Вернуть книгу");
-    print("6. Просмотреть членов библиотеки");
-    print("7. Поиск книги");
-    print("0. Выход");
-
-    stdout.write("Выберите опцию: ");
-    String? choice = stdin.readLineSync();
-
-    switch (choice) {
-      case '1':
-        stdout.write("Введите название книги: ");
-        String title = stdin.readLineSync() ?? '';
-        stdout.write("Введите автора книги: ");
-        String author = stdin.readLineSync() ?? '';
-        stdout.write("Введите isbn книги: ");
-        String isbn = stdin.readLineSync() ?? '';
-        library.addBook(Book(title, author,));
-        break;
-
-      case '2':
-        library.listBooks();
-        break;
-
-      case '3':
-        stdout.write("Введите ФИО члена библиотеки: ");
-        String fullName = stdin.readLineSync() ?? '';
-        stdout.write("Введите email: ");
-        String email = stdin.readLineSync() ?? '';
-        stdout.write("Введите номер телефона: ");
-        String phoneNumber = stdin.readLineSync() ?? '';
-        library.addMember(Member(fullName, email, phoneNumber));
-        break;
-
-      case '4':
-        library.listMembers();
-        stdout.write("Введите ФИО члена, который берет книгу: ");
-        String memberName = stdin.readLineSync() ?? '';
-        Member? member;
-        for (var m in library.members) {
-          if (m.fullName == memberName) {
-            member = m;
-            break;
-          }
-        }
-        if (member == null) {
-          print("Член с таким ФИО не найден.");
-          break;
-        }
-        
-        stdout.write("Введите название книги, которую хотите выдать: ");
-        String bookTitle = stdin.readLineSync() ?? '';
-        Book? book;
-        for (var b in library.books) {
-          if (b.title == bookTitle) {
-            book = b;
-            break;
-          }
-        }
-        if (book == null) {
-          print("Книга с таким названием не найдена.");
-          break;
-        }
-        library.loanBook(member, book);
-        break;
-
-      case '5':
-        stdout.write("Введите название книги для возврата: ");
-        String returnTitle = stdin.readLineSync() ?? '';
-        Book? returnBook;
-        for (var b in library.books) {
-          if (b.title == returnTitle) {
-            returnBook = b;
-            break;
-          }
-        }
-        if (returnBook == null) {
-          print("Книга с таким названием не найдена.");
-          break;
-        }
-        library.returnBook(returnBook);
-        break;
-
-      case '6':
-        library.listMembers();
-        break;
-
-      case '7':
-        stdout.write("Введите название или автора для поиска: ");
-        String query = stdin.readLineSync() ?? '';
-        var searchResults = library.searchBooks(query);
-        print("Результаты поиска:");
-        for (var book in searchResults) {
-          print("Книга найдена: '${book.title}' автор '${book.author}'");
-        }
-        break;
-
-      case '0':
-        print("Выход из программы...");
-        return;
-
-      default:
-        print("Неверный ввод. Пожалуйста, попробуйте снова.");
-    }
-  }
+  LibraryApp().run();
 }
